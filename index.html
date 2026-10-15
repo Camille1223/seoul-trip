@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1a1a2e">
+<title>首尔4天购物攻略 · 住弘大</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html,body { height:100%; overflow:hidden; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background:#f7f3ea; position:fixed; width:100%; touch-action:none;
+  }
+  /* 顶部标题条 */
+  #topbar {
+    position:absolute; top:0; left:0; right:0; z-index:20;
+    background:rgba(26,26,46,.92); color:#fff; padding:calc(8px + env(safe-area-inset-top)) 14px 8px;
+    display:flex; align-items:center; gap:10px; backdrop-filter:blur(6px);
+  }
+  #topbar h1 { font-size:16px; font-weight:700; flex:1; }
+  #topbar .sub { font-size:11px; color:#bbb; }
+  /* 日期切换 chips —— 顶部横向 */
+  #daybar {
+    position:absolute; top:calc(44px + env(safe-area-inset-top)); left:0; right:0; z-index:19;
+    display:flex; gap:6px; padding:8px 10px; overflow-x:auto; -webkit-overflow-scrolling:touch;
+    background:rgba(247,243,234,.9); backdrop-filter:blur(4px);
+  }
+  .chip {
+    flex:0 0 auto; padding:7px 14px; border:none; border-radius:20px;
+    font-size:13px; font-weight:700; color:#fff; opacity:.5; transition:opacity .15s, transform .1s;
+  }
+  .chip.active { opacity:1; transform:scale(1.05); }
+  /* 地图区 */
+  #stage { position:absolute; top:0; left:0; right:0; bottom:0; }
+  svg { width:100%; height:100%; display:block; background:#f7f3ea; touch-action:none; }
+  .mk circle.ring { opacity:0; }
+  .mk.hl circle.ring { opacity:1; }
+  .mk text.num { font-weight:800; fill:#fff; }
+  .mklabel { fill:#2a2a2a; font-weight:700;
+    paint-order:stroke; stroke:#fff; stroke-width:4px; stroke-linejoin:round; }
+  .area-label { font-weight:800; fill:#5a6472; opacity:.42; letter-spacing:1px;
+    paint-order:stroke; stroke:#f7f3ea; stroke-width:5px; stroke-linejoin:round; }
+  .river-label { fill:#3a7ca8; font-weight:800; font-style:italic; opacity:.9;
+    paint-order:stroke; stroke:#f7f3ea; stroke-width:4px; }
+  /* 底部抽屉 */
+  #sheet {
+    position:absolute; left:0; right:0; bottom:0; z-index:30;
+    background:#fff; border-radius:18px 18px 0 0; box-shadow:0 -4px 20px rgba(0,0,0,.18);
+    transform:translateY(calc(100% - 128px)); transition:transform .28s cubic-bezier(.3,.8,.4,1);
+    max-height:82%; display:flex; flex-direction:column;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  #sheet.open { transform:translateY(0); }
+  #handle { padding:9px 0 4px; display:flex; justify-content:center; flex:0 0 auto; }
+  #handle .bar { width:40px; height:5px; border-radius:3px; background:#ccc; }
+  #sheetHead {
+    padding:2px 18px 10px; display:flex; align-items:center; gap:8px; flex:0 0 auto;
+    border-bottom:1px solid #f0f0f0;
+  }
+  #sheetHead .dot { width:14px;height:14px;border-radius:50%; }
+  #sheetHead .ttl { font-size:16px; font-weight:800; color:#1a1a2e; }
+  #sheetHead .cnt { font-size:12px; color:#999; margin-left:auto; }
+  #sheetBody { overflow-y:auto; -webkit-overflow-scrolling:touch; padding:10px 14px 24px; }
+  .spot {
+    display:flex; gap:10px; padding:11px 12px; margin-bottom:7px; border-radius:11px;
+    background:#fafafa; align-items:flex-start;
+  }
+  .spot.hl { background:#fff3d6; box-shadow:0 0 0 2px #f5c242 inset; }
+  .spot .num { width:24px;height:24px;border-radius:50%;color:#fff;font-size:13px;
+    font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px; }
+  .spot .name { font-size:14px; font-weight:700; color:#2a2a2a; }
+  .spot .buy { font-size:12px; color:#e0518a; margin-top:3px; line-height:1.5; }
+  #peekHint { font-size:12px; color:#aaa; text-align:center; padding:4px 0 8px; flex:0 0 auto; }
+  /* 右侧缩放 */
+  #zoomctl { position:absolute; right:12px; bottom:150px; z-index:25; display:flex; flex-direction:column; gap:7px; }
+  #zoomctl button { width:42px;height:42px;border:none;background:#fff;border-radius:11px;
+    font-size:22px;font-weight:700;color:#333;box-shadow:0 2px 8px rgba(0,0,0,.25); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <svg id="map" viewBox="0 0 1000 720" preserveAspectRatio="xMidYMid meet"></svg>
+</div>
+<div id="topbar">
+  <h1>🗺 首尔购物攻略</h1>
+  <span class="sub">4天·住弘大</span>
+</div>
+<div id="daybar" id="dayFilter"></div>
+<div id="zoomctl"><button id="zin">+</button><button id="zout">−</button><button id="zreset">⤢</button></div>
+
+<div id="sheet">
+  <div id="handle"><div class="bar"></div></div>
+  <div id="sheetHead"><span class="dot" id="shDot"></span><span class="ttl" id="shTtl">点击店铺看清单</span><span class="cnt" id="shCnt"></span></div>
+  <div id="peekHint">↑ 上滑看本日购物清单</div>
+  <div id="sheetBody"></div>
+</div>
+
+<script>
+const DAYS = [
+  { id:1, color:"#e74c3c", title:"DAY1 江南奢侈+PFK", area:"江南/新沙/清潭",
+    spots:[
+      { n:1, name:"PFK 做脸", x:640, y:560, buy:"重点·当天少走路" },
+      { n:2, name:"新沙洞 林荫道", x:585, y:505, buy:"Low Classic大黑包 / 中古LV / Gentle Monster / EPT / CK外套" },
+      { n:3, name:"清潭洞 奢侈品街", x:720, y:460, buy:"Dior Djourney黑中号 / LV Speedy25老花 / Graceful / 泫雅包 / Chanel Duma" },
+      { n:4, name:"新世界百货江南店", x:545, y:605, buy:"Longchamp法棍(黄老师) / TF口红21 / TF口红06" },
+    ]},
+  { id:2, color:"#8e44ad", title:"DAY2 圣水洞暴走", area:"圣水洞",
+    spots:[
+      { n:1, name:"Martin Kim", x:700, y:300, buy:"MK帽子(Sunny代购) / 帆布包" },
+      { n:2, name:"Emis", x:770, y:300, buy:"帆布包×3(小朋友)" },
+      { n:3, name:"Rolarola", x:690, y:345, buy:"服装" },
+      { n:4, name:"Raive", x:800, y:325, buy:"服装" },
+      { n:5, name:"RR / On&On", x:760, y:360, buy:"服装" },
+      { n:6, name:"Blue Elephant", x:710, y:390, buy:"眼镜 / 配饰" },
+      { n:7, name:"Gentle Monster旗舰", x:650, y:270, buy:"UNA CN01(Summer代购)" },
+      { n:8, name:"鬼冢虎 Onitsuka", x:640, y:330, buy:"鞋" },
+      { n:9, name:"Adidas Originals", x:655, y:385, buy:"鞋(黄老师)" },
+      { n:10, name:"Curen", x:820, y:285, buy:"服装" },
+      { n:11, name:"弘大OliveYoung(晚)", x:235, y:255, buy:"化妆刷/面膜/护手霜/isoi洗面奶/equalogy颈纹/d'Alba素颜霜/leeko蓬松夹" },
+    ]},
+  { id:3, color:"#27ae60", title:"DAY3 汉南+新龙山", area:"汉南/龙山",
+    spots:[
+      { n:1, name:"Bymallee", x:460, y:360, buy:"服装" },
+      { n:2, name:"Raive 汉南", x:540, y:355, buy:"服装" },
+      { n:3, name:"Martin Kim 汉南", x:530, y:410, buy:"服装" },
+      { n:4, name:"Emis 汉南", x:450, y:415, buy:"帆布包" },
+      { n:5, name:"Le Labo 汉南", x:490, y:385, buy:"Citron28 韩国限定(送朋友)" },
+      { n:6, name:"I'Park Mall新龙山", x:350, y:355, buy:"6楼动漫区·高达(朋友生日) / 四驱车(老公)" },
+      { n:7, name:"玩具反斗城", x:340, y:410, buy:"高达限定 / 赛车模型" },
+    ]},
+  { id:4, color:"#2980b9", title:"DAY4 弘大收尾", area:"弘大(不跨区)",
+    spots:[
+      { n:1, name:"美容预约", x:180, y:220, buy:"剪发/化妆/证件照 全部安排一起·上午" },
+      { n:2, name:"弘大OliveYoung二刷", x:265, y:245, buy:"面膜/护手霜/化妆品/爆款补货" },
+      { n:3, name:"弘大服装街", x:150, y:280, buy:"EPT / 鬼冢虎 / Adidas / Martin Kim 查漏补缺" },
+      { n:4, name:"代购补货点", x:270, y:300, buy:"姐姐眼药水+发膜 / 玥玥电子烟6-9根" },
+    ]},
+];
+const AIRPORT = { color:"#f39c12", name:"清州机场提货(20号)", x:870, y:680,
+  buy:"新罗免税提货 / 乐天免税提货 / 两条烟 / Longchamp补货" };
+const AREAS = [
+  { label:"弘大", x:110, y:170, w:230, h:180 },
+  { label:"龙山", x:290, y:320, w:150, h:130 },
+  { label:"汉南", x:420, y:330, w:170, h:130 },
+  { label:"圣水", x:600, y:230, w:280, h:200 },
+  { label:"新沙·江南", x:510, y:470, w:180, h:180 },
+  { label:"清潭", x:670, y:420, w:160, h:110 },
+];
+const AREACOLOR={ "弘大":"#2980b9","龙山":"#27ae60","汉南":"#27ae60","圣水":"#8e44ad","新沙·江南":"#e74c3c","清潭":"#e74c3c" };
+
+const svg=document.getElementById('map');
+const NS="http://www.w3.org/2000/svg";
+function el(t,a){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;}
+const world=el('g',{}); svg.appendChild(world);
+world.appendChild(el('path',{fill:'#9ecae8',opacity:.6,
+  d:'M -20 450 C 180 400, 320 470, 470 440 S 740 390, 1020 430 L 1020 505 C 760 475, 600 545, 460 512 S 160 480, -20 522 Z'}));
+AREAS.forEach(a=>{
+  world.appendChild(el('rect',{x:a.x,y:a.y,width:a.w,height:a.h,rx:28,fill:AREACOLOR[a.label],opacity:.12}));
+  const t=el('text',{class:'area-label','font-size':22,x:a.x+a.w/2,y:a.y+28,'text-anchor':'middle'});t.textContent=a.label;world.appendChild(t);
+});
+const rl=el('text',{class:'river-label','font-size':18,x:130,y:445,transform:'rotate(-6 130 445)'});rl.textContent='한강 汉江';world.appendChild(rl);
+
+const markerEls={},labelEls={};
+function drawMarker(day,s){
+  const g=el('g',{class:'mk','data-key':`${day.id}-${s.n}`});
+  g.appendChild(el('circle',{class:'ring',cx:s.x,cy:s.y,r:19,fill:'none',stroke:'#f5c242','stroke-width':4}));
+  g.appendChild(el('circle',{cx:s.x,cy:s.y,r:16,fill:day.color,stroke:'#fff','stroke-width':2.5}));
+  const num=el('text',{class:'num',x:s.x,y:s.y+6,'text-anchor':'middle','font-size':17});num.textContent=s.n;g.appendChild(num);
+  const lbl=el('text',{class:'mklabel','font-size':17,x:s.x,y:s.y-24,'text-anchor':'middle',opacity:0});lbl.textContent=s.n+'. '+s.name;
+  g.appendChild(lbl);labelEls[`${day.id}-${s.n}`]=lbl;
+  g.addEventListener('click',e=>{e.stopPropagation();highlight(day.id,s.n);});
+  world.appendChild(g);markerEls[`${day.id}-${s.n}`]=g;
+}
+const dayGroups={};
+DAYS.forEach(d=>{dayGroups[d.id]=[];d.spots.forEach(s=>{drawMarker(d,s);dayGroups[d.id].push(`${d.id}-${s.n}`);});});
+(function(){
+  const g=el('g',{class:'mk'});
+  g.appendChild(el('circle',{cx:AIRPORT.x,cy:AIRPORT.y,r:17,fill:AIRPORT.color,stroke:'#fff','stroke-width':2.5}));
+  const t=el('text',{class:'num',x:AIRPORT.x,y:AIRPORT.y+6,'text-anchor':'middle','font-size':17});t.textContent='✈';g.appendChild(t);
+  const lbl=el('text',{class:'mklabel','font-size':15,x:AIRPORT.x,y:AIRPORT.y-24,'text-anchor':'middle'});lbl.textContent='清州机场';g.appendChild(lbl);
+  world.appendChild(g);
+})();
+
+// viewBox 缩放/平移(触屏)
+let vb={x:0,y:0,w:1000,h:720};
+function applyVB(){svg.setAttribute('viewBox',`${vb.x} ${vb.y} ${vb.w} ${vb.h}`);}
+function clampW(w){return Math.max(250,Math.min(1400,w));}
+function zoomAt(f,cx,cy){const nw=clampW(vb.w*f);f=nw/vb.w;vb.x=cx-(cx-vb.x)*f;vb.y=cy-(cy-vb.y)*f;vb.w=nw;vb.h=nw*0.72;applyVB();}
+function ptFromClient(cx,cy){const r=svg.getBoundingClientRect();return{x:vb.x+(cx-r.left)/r.width*vb.w,y:vb.y+(cy-r.top)/r.height*vb.h};}
+document.getElementById('zin').onclick=()=>zoomAt(0.78,vb.x+vb.w/2,vb.y+vb.h/2);
+document.getElementById('zout').onclick=()=>zoomAt(1.28,vb.x+vb.w/2,vb.y+vb.h/2);
+document.getElementById('zreset').onclick=()=>{setDay(0);};
+// 触屏手势
+let touch={mode:null};
+svg.addEventListener('touchstart',e=>{
+  if(e.touches.length===1){const t=e.touches[0];touch={mode:'pan',sx:t.clientX,sy:t.clientY,vx:vb.x,vy:vb.y};}
+  else if(e.touches.length===2){const[a,b]=e.touches;
+    touch={mode:'pinch',d0:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY),w0:vb.w,
+      mid:ptFromClient((a.clientX+b.clientX)/2,(a.clientY+b.clientY)/2)};}
+},{passive:true});
+svg.addEventListener('touchmove',e=>{
+  if(touch.mode==='pan'&&e.touches.length===1){const t=e.touches[0];const r=svg.getBoundingClientRect();
+    vb.x=touch.vx-(t.clientX-touch.sx)/r.width*vb.w;vb.y=touch.vy-(t.clientY-touch.sy)/r.height*vb.h;applyVB();}
+  else if(touch.mode==='pinch'&&e.touches.length===2){const[a,b]=e.touches;
+    const d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+    const nw=clampW(touch.w0*(touch.d0/d));vb.w=nw;vb.h=nw*0.72;
+    vb.x=touch.mid.x-(touch.mid.x-vb.x);applyVB();}
+},{passive:true});
+
+// 底部抽屉
+const sheet=document.getElementById('sheet');
+const handle=document.getElementById('handle');
+function openSheet(o){sheet.classList.toggle('open',o);}
+handle.addEventListener('click',()=>openSheet(!sheet.classList.contains('open')));
+let sh=null;
+handle.addEventListener('touchstart',e=>{sh={y:e.touches[0].clientY,open:sheet.classList.contains('open')};},{passive:true});
+handle.addEventListener('touchend',e=>{if(!sh)return;const dy=e.changedTouches[0].clientY-sh.y;
+  if(dy<-30)openSheet(true);else if(dy>30)openSheet(false);sh=null;});
+
+// 高亮
+function highlight(dayId,n){
+  if(activeDay!==dayId)setDay(dayId,true);
+  Object.values(markerEls).forEach(g=>g.classList.remove('hl'));
+  document.querySelectorAll('.spot').forEach(s=>s.classList.remove('hl'));
+  markerEls[`${dayId}-${n}`]?.classList.add('hl');
+  const li=document.querySelector(`.spot[data-key="${dayId}-${n}"]`);
+  if(li){li.classList.add('hl');}
+  const s=DAYS.find(d=>d.id===dayId).spots.find(x=>x.n===n);
+  vb.w=clampW(430);vb.h=vb.w*0.72;vb.x=s.x-vb.w/2;vb.y=s.y-vb.h/2;applyVB();
+  openSheet(true);
+  if(li)setTimeout(()=>li.scrollIntoView({block:'center',behavior:'smooth'}),120);
+}
+
+// 选中某天
+let activeDay=0; // 0=全部
+function fitDay(d){
+  const xs=d.spots.map(s=>s.x),ys=d.spots.map(s=>s.y);
+  const minx=Math.min(...xs),maxx=Math.max(...xs),miny=Math.min(...ys),maxy=Math.max(...ys);
+  const padX=130,padY=120;
+  let w=Math.max(maxx-minx+padX*2,360),h=Math.max(maxy-miny+padY*2,360*0.72);
+  w=Math.max(w,h/0.72);vb.w=clampW(w);vb.h=vb.w*0.72;
+  vb.x=(minx+maxx)/2-vb.w/2;vb.y=(miny+maxy)/2-vb.h/2;applyVB();
+}
+function setDay(id,keepView){
+  activeDay=id;
+  // marker 显隐 + 标签
+  DAYS.forEach(d=>dayGroups[d.id].forEach(k=>{
+    const show=(id===0||id===d.id);
+    markerEls[k].style.display=show?'':'none';
+    labelEls[k].setAttribute('opacity',(id===d.id)?1:0);
+  }));
+  renderChips(); renderSheet();
+  if(!keepView){ if(id===0){vb={x:0,y:0,w:1000,h:720};applyVB();} else fitDay(DAYS.find(d=>d.id===id)); }
+}
+
+// chips
+const daybar=document.getElementById('daybar');
+function renderChips(){
+  daybar.innerHTML='';
+  const all=document.createElement('button');all.className='chip'+(activeDay===0?' active':'');all.style.background='#555';all.textContent='全部';
+  all.onclick=()=>setDay(0);daybar.appendChild(all);
+  DAYS.forEach(d=>{const b=document.createElement('button');
+    b.className='chip'+(activeDay===d.id?' active':'');b.style.background=d.color;b.textContent='D'+d.id;
+    b.onclick=()=>setDay(d.id);daybar.appendChild(b);});
+}
+// sheet 内容
+const shDot=document.getElementById('shDot'),shTtl=document.getElementById('shTtl'),shCnt=document.getElementById('shCnt'),shBody=document.getElementById('sheetBody');
+function renderSheet(){
+  shBody.innerHTML='';
+  const days = activeDay===0?DAYS:[DAYS.find(d=>d.id===activeDay)];
+  if(activeDay===0){shDot.style.background='#555';shTtl.textContent='全部4天路线';shCnt.textContent='点D1-D4看单日';}
+  else{const d=DAYS.find(x=>x.id===activeDay);shDot.style.background=d.color;shTtl.textContent=d.title;shCnt.textContent=d.area;}
+  days.forEach(d=>{
+    if(activeDay===0){const h=document.createElement('div');h.style.cssText='font-size:13px;font-weight:800;color:'+d.color+';margin:10px 2px 6px;';h.textContent=d.title+' · '+d.area;shBody.appendChild(h);}
+    d.spots.forEach(s=>{
+      const e=document.createElement('div');e.className='spot';e.setAttribute('data-key',`${d.id}-${s.n}`);
+      e.innerHTML=`<span class="num" style="background:${d.color}">${s.n}</span><div><div class="name">${s.name}</div><div class="buy">${s.buy}</div></div>`;
+      e.onclick=()=>highlight(d.id,s.n);
+      shBody.appendChild(e);
+    });
+  });
+}
+setDay(0);
+openSheet(false);
+</script>
+</body>
+</html>
